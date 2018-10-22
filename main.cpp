@@ -4,12 +4,137 @@
 
 using namespace std;
 
+/// Helper functions
+
 template<typename T> constexpr bool is_size(size_t size) { return sizeof(T) == size; }
+
+template<typename T> constexpr size_t get_num_lanes() {
+    if constexpr(is_same<T,__m128i>::value)
+        return 1;
+    else
+    if constexpr(is_same<T,__m256i>::value)
+        return 2;
+    /*else
+    if constexpr(is_same<T,__m512i>::value)
+        return 4;*/
+    else
+        static_assert(false, "Data type not supported");
+
+}
+
+/// Intrinsics wrapper
+
+// Add
+
+template<typename op_type, typename T> _m_add(T a, T b) {
+    if constexpr(is_same<op_type, short>::value)
+        return _m_add_i16<T>(a, b);
+    else if constexpr(is_same<op_type, int>::value)
+        return _m_add_i32<T>(a, b);
+    else if constexpr(is_same<op_type, float>::value)
+        return _m_add_ps<T>(a, b);
+}
+
+template<typename T> T _m_add_i16(T a, T b) {
+    if constexpr(is_same<T,__m128i>::value)
+        return _mm_add_epi16(a,b);
+    else
+    if constexpr(is_same<T,__m256i>::value)
+        return _mm256_add_epi16(a,b);
+}
+
+template<typename T> T _m_add_i32(T a, T b) {
+    if constexpr(is_same<T,__m128i>::value)
+        return _mm_add_epi32(a,b);
+    else
+    if constexpr(is_same<T,__m256i>::value)
+        return _mm256_add_epi32(a,b);
+}
+
+template<typename T> T _m_add_f32(T a, T b) {
+    if constexpr(is_same<T,__m128>::value)
+        return _mm_add_ps(a,b);
+    else
+    if constexpr(is_same<T,__m256>::value)
+        return _mm256_add_ps(a,b);
+}
+
+// Mul
+
+template<typename op_type, typename T> _m_mul(T a, T b) {
+    if constexpr(is_same<op_type, short>::value)
+        return _m_mul_i16<T>(a, b);
+    else if constexpr(is_same<op_type, int>::value)
+        return _m_mul_i32<T>(a, b);
+    else if constexpr(is_same<op_type, float>::value)
+        return _m_mul_ps<T>(a, b);
+}
+
+template<typename T> T _m_mul_i16(T a, T b) {
+    if constexpr(is_same<T,__m128i>::value)
+        return _mm_mullo_epi16(a,b);
+    else
+    if constexpr(is_same<T,__m256i>::value)
+        return _mm256_mullo_epi16(a,b);
+}
+
+template<typename T> T _m_mul_i32(T a, T b) {
+    if constexpr(is_same<T,__m128i>::value)
+        return _mm_mullo_epi32(a,b);
+    else
+    if constexpr(is_same<T,__m256i>::value)
+        return _mm256_mullo_epi32(a,b);
+}
+
+template<typename T> T _m_mul_f32(T a, T b) {
+    if constexpr(is_same<T,__m128>::value)
+        return _mm_mul_ps(a,b);
+    else
+    if constexpr(is_same<T,__m256>::value)
+        return _mm256_mul_ps(a,b);
+}
+
+/// Simd type wrapper
+// supports int, float, short data types
+
+template<typename simd_type, typename data_type> class simd_wrapper {
+private:
+    typedef simd_wrapper<simd_type, data_type> self_type;
+    simd_type data;
+public:
+
+    simd_wrapper(simd_type &value) {
+        data = value;
+    }
+
+    simd_type operator() {
+        return data;
+    }
+
+    operator+(const self_type &other) {
+        /*if constexpr( is_same<int, data_type>::value )
+            return _m_add_i32(data, other.data);
+        else
+        if constexpr( is_same<short, data_type>::value )
+            return _m_add_i16(data, other.data);
+        else
+        if constexpr( is_same<float, data_type>::value )
+            return _m_add_ps(data, other.data);*/
+        return _m_add<data_type, simd_type>(this->data, other.data);
+    }
+
+    operator*(const self_type &other) {
+        return _m_mul<data_type, simd_type>(this->data, other.data);
+    }
+};
+
+/// Simd vector implementation
 
 template<typename T, typename V> class simd_iterator
 {
 private:
     T *buffer;
+    constexpr size_t _lanes = get_num_lanes<V>()
 public:
 
     simd_iterator(T *buffer): buffer(buffer) {}
@@ -17,29 +142,24 @@ public:
 
     simd_iterator<T,V> operator++() {
         simd_iterator<T,V> r = *this;
-        if constexpr( sizeof(V)==16 )
-            buffer++;
-        else if constexpr( sizeof(V)==32 )
-            buffer+=2;
+        buffer += _lanes;
         return r;
     }
+
     simd_iterator<T,V> operator++(int j) {
-        if constexpr( sizeof(V)==16 )
-            buffer++;
-        else if constexpr( sizeof(V)==32 )
-            buffer+=2;
+        buffer += _lanes;
         return *this;
     }
 
     V operator*() {
         V res;
-        if constexpr( sizeof(V)==16 ) {
+        if constexpr( is_same<V,__m128i>::value ) {
             if constexpr( sizeof(T)==16 )
                 res = _mm_loadu_si128((__m128i*)buffer);
             else if constexpr( sizeof(T)==8 )
                 res = _mm_loadu_si64(buffer);
         }
-        else if constexpr( sizeof(V)==32 )
+        else if constexpr( is_same<V,__m256i>::value )
         {
             if constexpr( sizeof(T) == 16 )
                 res = _mm256_setr_m128i(_mm_loadu_si128((__m128i*)buffer), _mm_loadu_si128((__m128i*)(buffer+1)));
@@ -55,11 +175,11 @@ public:
     }
 
     void store(V data) {
-        if constexpr( is_size<V>(16) ) {
+        if constexpr( is_same<V,__m128i>::value ) {
             if constexpr( is_size<T>(16) ) _mm_storeu_si128(buffer, data);
             if constexpr( is_size<T>(8) )  _mm_storel_epi64(buffer, data);
         }
-        if constexpr( sizeof(V)==32 ) {
+        if constexpr( is_same<V,__m256i>::value ) {
             if constexpr( sizeof(T)==16 ) { 
                 _mm_storeu_si128(buffer,   _mm256_extracti128_si256(data, 0)); 
                 _mm_storeu_si128(buffer+1, _mm256_extracti128_si256(data, 1)); 
@@ -75,7 +195,7 @@ public:
 template<typename T, typename V> class simd_vector_t
 {
 private:
-    T *buf;         // 
+    T *buf;         // Source buffer
     size_t size;    // Number of elements
 public:
     typedef simd_iterator<T, V> iterator;
@@ -85,18 +205,15 @@ public:
     iterator begin() {
         return iterator(buf);
     }
+
     iterator end() {
         return iterator(buf+size);
     }
-};
 
-template<typename T> T _m_add32(T a, T b) {
-    if constexpr(is_same<T,__m128i>::value)
-        return _mm_add_epi32(a,b);
-    else
-    if constexpr(is_same<T,__m256i>::value)
-        return _mm256_add_epi32(a,b);
-}
+    size_t size() {
+        return size;
+    }
+};
 
 typedef simd_vector_t<__m128i, __m256i> simd_vector;
 
@@ -118,7 +235,7 @@ int main(int argc, char const *argv[])
         auto itb=Vb.begin();
         auto itc=Vc.begin();
         for(; ita!=Va.end(); ita++, itb++, itc++) {
-            ita.store(_m_add32(*itb, *itc));
+            ita.store(_m_add_i32(*itb, *itc));
         }
     }
 
