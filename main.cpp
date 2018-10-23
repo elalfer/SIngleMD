@@ -17,23 +17,14 @@ template<typename T> constexpr size_t get_num_lanes() {
     /*else
     if constexpr(is_same<T,__m512i>::value)
         return 4;*/
-    else
-        static_assert(false, "Data type not supported");
+    //else
+    //    static_assert(false, "Data type not supported");
 
 }
 
 /// Intrinsics wrapper
 
 // Add
-
-template<typename op_type, typename T> _m_add(T a, T b) {
-    if constexpr(is_same<op_type, short>::value)
-        return _m_add_i16<T>(a, b);
-    else if constexpr(is_same<op_type, int>::value)
-        return _m_add_i32<T>(a, b);
-    else if constexpr(is_same<op_type, float>::value)
-        return _m_add_ps<T>(a, b);
-}
 
 template<typename T> T _m_add_i16(T a, T b) {
     if constexpr(is_same<T,__m128i>::value)
@@ -59,16 +50,16 @@ template<typename T> T _m_add_f32(T a, T b) {
         return _mm256_add_ps(a,b);
 }
 
-// Mul
-
-template<typename op_type, typename T> _m_mul(T a, T b) {
+template<typename op_type, typename T> T _m_add(T a, T b) {
     if constexpr(is_same<op_type, short>::value)
-        return _m_mul_i16<T>(a, b);
+        return _m_add_i16<T>(a, b);
     else if constexpr(is_same<op_type, int>::value)
-        return _m_mul_i32<T>(a, b);
+        return _m_add_i32<T>(a, b);
     else if constexpr(is_same<op_type, float>::value)
-        return _m_mul_ps<T>(a, b);
+        return _m_add_f32<T>(a, b);
 }
+
+// Mul
 
 template<typename T> T _m_mul_i16(T a, T b) {
     if constexpr(is_same<T,__m128i>::value)
@@ -94,6 +85,15 @@ template<typename T> T _m_mul_f32(T a, T b) {
         return _mm256_mul_ps(a,b);
 }
 
+template<typename op_type, typename T> T _m_mul(T a, T b) {
+    if constexpr(is_same<op_type, short>::value)
+        return _m_mul_i16<T>(a, b);
+    else if constexpr(is_same<op_type, int>::value)
+        return _m_mul_i32<T>(a, b);
+    else if constexpr(is_same<op_type, float>::value)
+        return _m_mul_f32<T>(a, b);
+}
+
 /// Simd type wrapper
 // supports int, float, short data types
 
@@ -103,15 +103,15 @@ private:
     simd_type data;
 public:
 
-    simd_wrapper(simd_type &value) {
+    simd_wrapper(simd_type value) {
         data = value;
     }
 
-    simd_type operator() {
+    operator simd_type() const {
         return data;
     }
 
-    operator+(const self_type &other) {
+    self_type operator+(const self_type &other) {
         /*if constexpr( is_same<int, data_type>::value )
             return _m_add_i32(data, other.data);
         else
@@ -123,30 +123,30 @@ public:
         return _m_add<data_type, simd_type>(this->data, other.data);
     }
 
-    operator*(const self_type &other) {
+    self_type operator*(const self_type &other) {
         return _m_mul<data_type, simd_type>(this->data, other.data);
     }
 };
 
 /// Simd vector implementation
 
-template<typename T, typename V> class simd_iterator
+template<typename T, typename V, typename OP_TYPE> class simd_iterator
 {
 private:
     T *buffer;
-    constexpr size_t _lanes = get_num_lanes<V>()
+    const size_t _lanes = get_num_lanes<V>();
 public:
 
     simd_iterator(T *buffer): buffer(buffer) {}
     ~simd_iterator() {}
 
-    simd_iterator<T,V> operator++() {
-        simd_iterator<T,V> r = *this;
+    simd_iterator<T,V,OP_TYPE> operator++() {
+        simd_iterator<T,V,OP_TYPE> r = *this;
         buffer += _lanes;
         return r;
     }
 
-    simd_iterator<T,V> operator++(int j) {
+    simd_iterator<T,V,OP_TYPE> operator++(int j) {
         buffer += _lanes;
         return *this;
     }
@@ -170,7 +170,7 @@ public:
         return res;
     }
 
-    bool operator!=(const simd_iterator<T,V> &other) {
+    bool operator!=(const simd_iterator<T,V,OP_TYPE> &other) {
         return this->buffer != other.buffer;
     }
 
@@ -192,30 +192,30 @@ public:
     }
 };
 
-template<typename T, typename V> class simd_vector_t
+template<typename T, typename V, typename OP_TYPE> class simd_vector_t
 {
 private:
     T *buf;         // Source buffer
-    size_t size;    // Number of elements
+    size_t _size;    // Number of elements
 public:
-    typedef simd_iterator<T, V> iterator;
+    typedef simd_iterator<T, V, OP_TYPE> iterator;
 
-    simd_vector_t(T *buffer, size_t size): buf(buffer), size(size) {}
+    simd_vector_t(T *buffer, size_t size): buf(buffer), _size(size) {}
 
     iterator begin() {
         return iterator(buf);
     }
 
     iterator end() {
-        return iterator(buf+size);
+        return iterator(buf+_size);
     }
 
     size_t size() {
-        return size;
+        return _size;
     }
 };
 
-typedef simd_vector_t<__m128i, __m256i> simd_vector;
+typedef simd_vector_t<__m128i, __m256i, int> simd_vector;
 
 #define SIZE 1000
 #define TEST 100000
@@ -235,9 +235,14 @@ int main(int argc, char const *argv[])
         auto itb=Vb.begin();
         auto itc=Vc.begin();
         for(; ita!=Va.end(); ita++, itb++, itc++) {
-            ita.store(_m_add_i32(*itb, *itc));
+            ita.store(*itb + *itc);
         }
     }
+
+    simd_wrapper<__m128i, int> sv1(a[0]);
+    simd_wrapper<__m128i, int> sv2(a[0]);
+    sv1 = sv1 + sv2;
+    __m128i v = sv1;
 
 
     return 0;
