@@ -112,14 +112,6 @@ public:
     }
 
     self_type operator+(const self_type &other) {
-        /*if constexpr( is_same<int, data_type>::value )
-            return _m_add_i32(data, other.data);
-        else
-        if constexpr( is_same<short, data_type>::value )
-            return _m_add_i16(data, other.data);
-        else
-        if constexpr( is_same<float, data_type>::value )
-            return _m_add_ps(data, other.data);*/
         return _m_add<data_type, simd_type>(this->data, other.data);
     }
 
@@ -140,18 +132,18 @@ public:
     simd_iterator(T *buffer): buffer(buffer) {}
     ~simd_iterator() {}
 
-    simd_iterator<T,V,OP_TYPE> operator++() {
+    inline simd_iterator<T,V,OP_TYPE> operator++() {
         simd_iterator<T,V,OP_TYPE> r = *this;
         buffer += _lanes;
         return r;
     }
 
-    simd_iterator<T,V,OP_TYPE> operator++(int j) {
+    inline simd_iterator<T,V,OP_TYPE> operator++(int j) {
         buffer += _lanes;
         return *this;
     }
 
-    V operator*() {
+    inline simd_wrapper<V, OP_TYPE> operator*() {
         V res;
         if constexpr( is_same<V,__m128i>::value ) {
             if constexpr( sizeof(T)==16 )
@@ -170,11 +162,11 @@ public:
         return res;
     }
 
-    bool operator!=(const simd_iterator<T,V,OP_TYPE> &other) {
+    inline bool operator!=(const simd_iterator<T,V,OP_TYPE> &other) {
         return this->buffer != other.buffer;
     }
 
-    void store(V data) {
+    inline void store(V data) {
         if constexpr( is_same<V,__m128i>::value ) {
             if constexpr( is_size<T>(16) ) _mm_storeu_si128(buffer, data);
             if constexpr( is_size<T>(8) )  _mm_storel_epi64(buffer, data);
@@ -215,10 +207,10 @@ public:
     }
 };
 
-typedef simd_vector_t<__m128i, __m256i, int> simd_vector;
+typedef simd_vector_t<__m128i, __m256i, short> simd_vector;
 
 #define SIZE 1000
-#define TEST 100000
+#define TEST 10000000
 
 int main(int argc, char const *argv[])
 {
@@ -235,7 +227,8 @@ int main(int argc, char const *argv[])
         auto itb=Vb.begin();
         auto itc=Vc.begin();
         for(; ita!=Va.end(); ita++, itb++, itc++) {
-            ita.store(*itb + *itc);
+            // ita.store(_m_add_i32(*itb, *itc));
+            ita.store(*ita * *itb + *itc);
         }
     }
 
@@ -243,7 +236,6 @@ int main(int argc, char const *argv[])
     simd_wrapper<__m128i, int> sv2(a[0]);
     sv1 = sv1 + sv2;
     __m128i v = sv1;
-
 
     return 0;
 }
