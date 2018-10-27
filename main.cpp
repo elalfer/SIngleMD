@@ -4,6 +4,11 @@
 
 using namespace std;
 
+#define _mm256_set_m128i(/* __m128i */ hi, /* __m128i */ lo) \
+    _mm256_insertf128_si256(_mm256_castsi128_si256(lo), (hi), 0x1)
+
+#define _mm256_setr_m128i(lo, hi)   _mm256_set_m128i((hi), (lo))
+
 /// Helper functions
 
 template<typename T> constexpr bool is_size(size_t size) { return sizeof(T) == size; }
@@ -154,9 +159,9 @@ public:
         else if constexpr( is_same<V,__m256i>::value )
         {
             if constexpr( sizeof(T) == 16 )
-                res = _mm256_setr_m128i(_mm_loadu_si128((__m128i*)buffer), _mm_loadu_si128((__m128i*)(buffer+1)));
+                res = _mm256_set_m128i(_mm_loadu_si128((__m128i*)(buffer+1)), _mm_loadu_si128((__m128i*)(buffer)));
             else if constexpr( sizeof(T) == 8 )
-                res = _mm256_setr_m128i(_mm_loadu_si64(buffer), _mm_loadu_si64(buffer+1));
+                res = _mm256_set_m128i(_mm_loadu_si64(buffer+1), _mm_loadu_si64(buffer));
         }
 
         return res;
@@ -214,13 +219,13 @@ typedef simd_vector_t<__m128i, __m256i, short> simd_vector;
 
 int main(int argc, char const *argv[])
 {
-    __m128i *a = (__m128i*)malloc(sizeof(__m128i)*SIZE);
-    __m128i *b = (__m128i*)malloc(sizeof(__m128i)*SIZE);;
-    __m128i *c = (__m128i*)malloc(sizeof(__m128i)*SIZE);;
+    short *a = (short*)malloc(sizeof(__m128i)*SIZE);
+    short *b = (short*)malloc(sizeof(__m128i)*SIZE);;
+    short *c = (short*)malloc(sizeof(__m128i)*SIZE);;
 
-    simd_vector Va(a, SIZE);
-    simd_vector Vb(b, SIZE);
-    simd_vector Vc(c, SIZE);
+    simd_vector Va((__m128i*)a, SIZE);
+    simd_vector Vb((__m128i*)b, SIZE);
+    simd_vector Vc((__m128i*)c, SIZE);
 
     for(int i=0; i<TEST; i++) {
         auto ita=Va.begin();
@@ -232,10 +237,17 @@ int main(int argc, char const *argv[])
         }
     }
 
-    simd_wrapper<__m128i, int> sv1(a[0]);
+    short r = 0;
+    for(int i=0; i<SIZE*16/2; ++i)
+    {
+        r += a[i];
+    }
+    std::cout << r << std::endl;
+
+    /*simd_wrapper<__m128i, int> sv1(a[0]);
     simd_wrapper<__m128i, int> sv2(a[0]);
     sv1 = sv1 + sv2;
-    __m128i v = sv1;
+    __m128i v = sv1;*/
 
     return 0;
 }
