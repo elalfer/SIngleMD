@@ -127,6 +127,8 @@ public:
 
 /// Simd vector implementation
 
+// #define DOUBLE_PUMP_MEM
+
 template<typename T, typename V, typename OP_TYPE> class simd_iterator
 {
 private:
@@ -159,7 +161,11 @@ public:
         else if constexpr( is_same<V,__m256i>::value )
         {
             if constexpr( sizeof(T) == 16 )
+            #ifdef DOUBLE_PUMP_MEM
                 res = _mm256_set_m128i(_mm_loadu_si128((__m128i*)(buffer+1)), _mm_loadu_si128((__m128i*)(buffer)));
+            #else
+                res = _mm256_loadu_si256((__m256i*)(buffer));
+            #endif
             else if constexpr( sizeof(T) == 8 )
                 res = _mm256_set_m128i(_mm_loadu_si64(buffer+1), _mm_loadu_si64(buffer));
         }
@@ -177,9 +183,13 @@ public:
             if constexpr( is_size<T>(8) )  _mm_storel_epi64(buffer, data);
         }
         if constexpr( is_same<V,__m256i>::value ) {
-            if constexpr( sizeof(T)==16 ) { 
-                _mm_storeu_si128(buffer,   _mm256_extracti128_si256(data, 0)); 
-                _mm_storeu_si128(buffer+1, _mm256_extracti128_si256(data, 1)); 
+            if constexpr( sizeof(T)==16 ) {
+            #ifdef DOUBLE_PUMP_MEM
+                _mm_storeu_si128(buffer,   _mm256_extracti128_si256(data, 0));
+                _mm_storeu_si128(buffer+1, _mm256_extracti128_si256(data, 1));
+            #else
+                _mm256_storeu_si256((__m256i*)buffer, data);
+            #endif
             }
             if constexpr( sizeof(T)==8 ) { 
                 _mm_storel_epi64(buffer,   _mm256_extracti128_si256(data, 0)); 
@@ -220,8 +230,8 @@ typedef simd_vector_t<__m128i, __m256i, short> simd_vector;
 int main(int argc, char const *argv[])
 {
     short *a = (short*)malloc(sizeof(__m128i)*SIZE);
-    short *b = (short*)malloc(sizeof(__m128i)*SIZE);;
-    short *c = (short*)malloc(sizeof(__m128i)*SIZE);;
+    short *b = (short*)malloc(sizeof(__m128i)*SIZE);
+    short *c = (short*)malloc(sizeof(__m128i)*SIZE);
 
     simd_vector Va((__m128i*)a, SIZE);
     simd_vector Vb((__m128i*)b, SIZE);
