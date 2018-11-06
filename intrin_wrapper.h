@@ -9,7 +9,7 @@ using namespace std;
 
 // Load
 
-#define _m_loadu_si(V) (V)
+#define _m_loadu_si(V) ( (*(V)).get_value() )
 
 /*template<typename T> T _m_loadu_si(T* p) {
     if constexpr(is_same<T,__m128i>::value)

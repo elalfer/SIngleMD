@@ -36,6 +36,10 @@ public:
         return data;
     }
 
+    simd_type get_value() {
+    	return data;
+    }
+
     self_type operator+(const self_type &other) {
         return _m_add<data_type, simd_type>(this->data, other.data);
     }
@@ -71,7 +75,7 @@ public:
         return *this;
     }
 
-    inline simd_iterator<T,V,OP_TYPE> operator+(int cnt) {
+    inline self_type operator+(int cnt) {
     	// buffer += _lanes*cnt;
     	return self_type(buffer + _lanes*cnt);
     }
@@ -151,7 +155,7 @@ public:
     	return ( sizeof(V) / sizeof(OP_TYPE) );
     }
 
-    simd_wrapper<V, OP_TYPE> operator[](size_t idx) {
-    	return begin()+idx;
+    iterator /*simd_wrapper<V, OP_TYPE>*/ operator[](size_t idx) {
+    	return (begin()+idx);
     }
 };

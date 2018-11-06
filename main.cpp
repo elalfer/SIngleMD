@@ -22,7 +22,7 @@ void RGB_To_C_SSE(uint16_t *nC, uint16_t *nR, uint16_t *nG, uint16_t *nB, size_t
     }
 }
 
-typedef simd_vector_t<__m128i, __m128i, short> simd_vector;
+typedef simd_vector_t<__m128i, __m256i, short> simd_vector;
 
 void RGB_To_C_vec(uint16_t *nC, uint16_t *nR, uint16_t *nG, uint16_t *nB, size_t size) {
     simd_vector vR((__m128i*)nR, size);
@@ -36,10 +36,28 @@ void RGB_To_C_vec(uint16_t *nC, uint16_t *nR, uint16_t *nG, uint16_t *nB, size_t
         auto G = _m_loadu_si(vG[i]);
         auto B = _m_loadu_si(vB[i]);
 
-        auto res = _m_sub_epi16(R, G);
-        // _m_sub_epi16( _m_max_epi16(R, _m_max_epi16(G, B)), _m_min_epi16(R, _m_min_epi16(G, B)));
+        // Very similar to legacy intrinsics
+        auto res = _m_sub_epi16( _m_max_epi16(R, _m_max_epi16(G, B)), _m_min_epi16(R, _m_min_epi16(G, B)));
+        // TODO: Same should be possible to write without specifying op size
+        //      auto res = _m_sub( _m_max(R, _m_max(G, B)), _m_min(R, _m_min(G, B)));
 
         _m_storeu_si(vC[i], res);
+    }
+}
+
+void RGB_To_C_vec_operator(uint16_t *nC, uint16_t *nR, uint16_t *nG, uint16_t *nB, size_t size) {
+    simd_vector vR((__m128i*)nR, size);
+    simd_vector vG((__m128i*)nG, size);
+    simd_vector vB((__m128i*)nB, size);
+    simd_vector vC((__m128i*)nC, size);
+
+    simd_vector::iterator iR=vR.begin();
+    simd_vector::iterator iG=vG.begin();
+    simd_vector::iterator iB=vB.begin();
+    for(auto iC=vC.begin(); iC != vC.end(); iR++, iG++, iB++, iC++)
+    {
+        auto res = *iR * *iG + *iB;
+        iC.store(res);
     }
 }
 
@@ -53,6 +71,13 @@ int main(int argc, char const *argv[])
     uint16_t *nB = (uint16_t*)malloc(SIZE*sizeof(uint16_t));
     uint16_t *nC = (uint16_t*)malloc(SIZE*sizeof(uint16_t));
 
+
+    for(int i=0; i<SIZE; ++i) {
+        nR[i] = rand();
+        nG[i] = rand();
+        nB[i] = rand();
+        nC[i] = rand();
+    }
 
     for(int i=0; i<TEST; i++)
         RGB_To_C_vec(nC, nR, nG, nB, SIZE);
