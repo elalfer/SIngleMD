@@ -2,6 +2,7 @@
 #include <iostream>
 #include <immintrin.h>
 #include <simd_vector.h>
+#include <x86intrin.h>
 
 using namespace std;
 
@@ -38,13 +39,12 @@ void RGB_To_C_vec(uint16_t *nC, uint16_t *nR, uint16_t *nG, uint16_t *nB, size_t
 
         // Very similar to legacy intrinsics
         auto res = _m_sub_epi16( _m_max_epi16(R, _m_max_epi16(G, B)), _m_min_epi16(R, _m_min_epi16(G, B)));
-        // TODO: Same should be possible to write without specifying op size
-        //      auto res = _m_sub( _m_max(R, _m_max(G, B)), _m_min(R, _m_min(G, B)));
 
         _m_storeu_si(vC[i], res);
     }
 }
 
+// TODO implement min/max operations
 void RGB_To_C_vec_operator(uint16_t *nC, uint16_t *nR, uint16_t *nG, uint16_t *nB, size_t size) {
     simd_vector vR((__m128i*)nR, size);
     simd_vector vG((__m128i*)nG, size);
@@ -61,8 +61,8 @@ void RGB_To_C_vec_operator(uint16_t *nC, uint16_t *nR, uint16_t *nG, uint16_t *n
     }
 }
 
-#define SIZE 10000
-#define TEST 10000000
+#define SIZE 2048
+#define TEST 1000000
 
 int main(int argc, char const *argv[])
 {
@@ -79,39 +79,24 @@ int main(int argc, char const *argv[])
         nC[i] = rand();
     }
 
+	__int64_t start_mark = __rdtsc();
+	for (int i = 0; i < TEST; i++)
+		RGB_To_C_SSE(nC, nR, nG, nB, SIZE);
+	__int64_t end_mark = __rdtsc();
+	cout << "SSE\t" << end_mark - start_mark << " cycles" << endl;
+
+	start_mark = __rdtsc();
     for(int i=0; i<TEST; i++)
         RGB_To_C_vec(nC, nR, nG, nB, SIZE);
+	end_mark = __rdtsc();
+	cout << "Vector\t" << end_mark - start_mark << " cycles" << endl;
 
-    /*
-    short *a = (short*)malloc(sizeof(__m128i)*SIZE);
-    short *b = (short*)malloc(sizeof(__m128i)*SIZE);
-    short *c = (short*)malloc(sizeof(__m128i)*SIZE);
-
-    simd_vector Va((__m128i*)a, SIZE);
-    simd_vector Vb((__m128i*)b, SIZE);
-    simd_vector Vc((__m128i*)c, SIZE);
-
-    for(int i=0; i<TEST; i++) {
-        auto ita=Va.begin();
-        auto itb=Vb.begin();
-        auto itc=Vc.begin();
-        for(; ita!=Va.end(); ita++, itb++, itc++) {
-            // ita.store(_m_add_i32(*itb, *itc));
-            ita.store(*ita * *itb + *itc);
-        }
-    }*/
 
     short r = 0;
     for(int i=0; i<SIZE; ++i)
     {
         r += nC[i];
     }
-    std::cout << r << std::endl;
 
-    /*simd_wrapper<__m128i, int> sv1(a[0]);
-    simd_wrapper<__m128i, int> sv2(a[0]);
-    sv1 = sv1 + sv2;
-    __m128i v = sv1;*/
-
-    return 0;
+	return r;
 }
