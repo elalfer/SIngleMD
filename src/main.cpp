@@ -1,11 +1,17 @@
 #include <stdio.h>
 #include <iostream>
+#include <chrono>
 #include <immintrin.h>
 #include <simd_vector.h>
 #include <x86intrin.h>
 
 using namespace std;
 
+typedef std::chrono::high_resolution_clock Time;
+typedef std::chrono::milliseconds ms;
+typedef std::chrono::duration<float> fsec;
+
+__attribute__((noinline))
 void RGB_To_C_SSE(uint16_t *nC, uint16_t *nR, uint16_t *nG, uint16_t *nB, size_t size) {
     __m128i *vR = (__m128i*)nR;
     __m128i *vG = (__m128i*)nG;
@@ -25,6 +31,7 @@ void RGB_To_C_SSE(uint16_t *nC, uint16_t *nR, uint16_t *nG, uint16_t *nB, size_t
 
 typedef simd_vector_t<__m128i, __m256i, short> simd_vector;
 
+__attribute__((noinline))
 void RGB_To_C_vec(uint16_t *nC, uint16_t *nR, uint16_t *nG, uint16_t *nB, size_t size) {
     simd_vector vR((__m128i*)nR, size);
     simd_vector vG((__m128i*)nG, size);
@@ -45,6 +52,7 @@ void RGB_To_C_vec(uint16_t *nC, uint16_t *nR, uint16_t *nG, uint16_t *nB, size_t
 }
 
 // TODO implement min/max operations
+__attribute__((noinline))
 void RGB_To_C_vec_operator(uint16_t *nC, uint16_t *nR, uint16_t *nG, uint16_t *nB, size_t size) {
     simd_vector vR((__m128i*)nR, size);
     simd_vector vG((__m128i*)nG, size);
@@ -62,7 +70,7 @@ void RGB_To_C_vec_operator(uint16_t *nC, uint16_t *nR, uint16_t *nG, uint16_t *n
 }
 
 #define SIZE 2048
-#define TEST 1000000
+#define TEST 10000000
 
 int main(int argc, char const *argv[])
 {
@@ -79,29 +87,28 @@ int main(int argc, char const *argv[])
         nC[i] = rand();
     }
 
-	__int64_t start_mark = __rdtsc();
+	auto t0 = Time::now();
 	for (int i = 0; i < TEST; i++)
 		RGB_To_C_SSE(nC, nR, nG, nB, SIZE);
-	__int64_t end_mark = __rdtsc();
-	cout << "SSE\t" << end_mark - start_mark << " cycles" << endl;
+    auto t1 = Time::now();
 
-	start_mark = __rdtsc();
+    fsec fs = t1 - t0;
+    ms d = std::chrono::duration_cast<ms>(fs);
+    std::cout << "SSE " << d.count() << "ms\n";
+
+	t0 = Time::now();
     for(int i=0; i<TEST; i++)
         RGB_To_C_vec(nC, nR, nG, nB, SIZE);
-	end_mark = __rdtsc();
-	cout << "Vector\t" << end_mark - start_mark << " cycles" << endl;
+    t1 = Time::now();
 
-
-    short r = 0;
-    for(int i=0; i<SIZE; ++i)
-    {
-        r += nC[i];
-    }
+    fs = t1 - t0;
+    d = std::chrono::duration_cast<ms>(fs);
+    std::cout << "Vec " << d.count() << "ms\n";
 
     free(nR);
     free(nG);
     free(nB);
     free(nC);
 
-	return r;
+	return 0;
 }
