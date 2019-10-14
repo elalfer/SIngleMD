@@ -10,12 +10,11 @@ template<typename T> constexpr size_t get_num_lanes() {
     else
     if constexpr(is_same<T,__m256i>::value)
         return 2;
-    /*else
+#ifdef AVX512
+    else
     if constexpr(is_same<T,__m512i>::value)
-        return 4;*/
-    //else
-    //    static_assert(false, "Data type not supported");
-
+        return 4;
+#endif
 }
 
 
@@ -132,8 +131,8 @@ public:
 template<typename T, typename V, typename OP_TYPE> class simd_vector_t
 {
 private:
-    T *buf;         // Source buffer
-    size_t _size;    // Number of elements
+    T *buf;             // Source buffer
+    size_t _size;       // Number of elements
 public:
     typedef simd_iterator<T, V, OP_TYPE> iterator;
 
@@ -155,7 +154,7 @@ public:
     	return ( sizeof(V) / sizeof(OP_TYPE) );
     }
 
-    iterator /*simd_wrapper<V, OP_TYPE>*/ operator[](size_t idx) {
+    iterator operator[](size_t idx) {
     	return (begin()+idx);
     }
 };

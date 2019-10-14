@@ -98,5 +98,10 @@ int main(int argc, char const *argv[])
         r += nC[i];
     }
 
+    free(nR);
+    free(nG);
+    free(nB);
+    free(nC);
+
 	return r;
 }
